@@ -6,7 +6,9 @@ import (
 
 	"github.com/craftybase/craftybase-cli/internal/api"
 	"github.com/craftybase/craftybase-cli/internal/config"
+	"github.com/craftybase/craftybase-cli/internal/output"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -55,6 +57,18 @@ func init() {
 		}
 		return nil
 	}
+
+	defaultHelp := rootCmd.HelpFunc()
+	rootCmd.SetHelpFunc(func(c *cobra.Command, args []string) {
+		if c == rootCmd {
+			renderRootHelp(c, c.OutOrStdout(), resolveRenderOpts())
+			return
+		}
+		defaultHelp(c, args)
+	})
+	rootCmd.Run = func(c *cobra.Command, args []string) {
+		renderRootHelp(c, c.OutOrStdout(), resolveRenderOpts())
+	}
 }
 
 func resolveClient() (*api.Client, *config.Profile, error) {
@@ -85,4 +99,17 @@ func requireAuth() (*api.Client, *config.Profile, error) {
 		}
 	}
 	return client, profile, nil
+}
+
+func resolveRenderOpts() renderOpts {
+	color := output.ColorEnabled(flagNoColor)
+	width := 0
+	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
+		width = w
+	}
+	return renderOpts{
+		color:     color,
+		trueColor: color && output.SupportsTrueColor(),
+		width:     width,
+	}
 }

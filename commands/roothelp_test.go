@@ -107,3 +107,50 @@ func TestFlagRowsCoverPersistentFlags(t *testing.T) {
 		}
 	})
 }
+
+func TestExecute_NoArgs_ShowsBrandedScreen(t *testing.T) {
+	var buf bytes.Buffer
+	rootCmd.SetOut(&buf)
+	rootCmd.SetArgs([]string{})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "The command-line interface for Craftybase") {
+		t.Errorf("no-args invocation should show the branded screen, got:\n%s", out)
+	}
+}
+
+func TestExecute_RootHelpFlag_ShowsBrandedScreen(t *testing.T) {
+	var buf bytes.Buffer
+	rootCmd.SetOut(&buf)
+	rootCmd.SetArgs([]string{"--help"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(buf.String(), "The command-line interface for Craftybase") {
+		t.Errorf("--help should show the branded screen")
+	}
+}
+
+func TestExecute_SubcommandHelp_UsesDefault(t *testing.T) {
+	var buf bytes.Buffer
+	rootCmd.SetOut(&buf)
+	rootCmd.SetArgs([]string{"materials", "--help"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "The command-line interface for Craftybase") {
+		t.Errorf("subcommand help must not show the branded root screen")
+	}
+	if !strings.Contains(out, "Usage:") {
+		t.Errorf("subcommand help should be default Cobra help, got:\n%s", out)
+	}
+}
