@@ -1,0 +1,88 @@
+package commands
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/craftybase/craftybase-cli/internal/api"
+	"github.com/craftybase/craftybase-cli/internal/config"
+	"github.com/spf13/cobra"
+)
+
+var (
+	flagToken   string
+	flagAPIURL  string
+	flagJSON    bool
+	flagNDJSON  bool
+	flagNoColor bool
+	flagVerbose bool
+)
+
+var rootCmd = &cobra.Command{
+	Use:   "craftybase",
+	Short: "Official CLI for the Craftybase Public API",
+	Long: `craftybase is a command-line interface for the Craftybase Public API.
+
+Authenticate once, then manage your inventory from the terminal.
+
+Documentation: https://craftybase.com/docs/api`,
+	SilenceUsage:  true,
+	SilenceErrors: true,
+}
+
+func Execute(version string) {
+	err := rootCmd.Execute()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		if apiErr, ok := err.(*api.APIError); ok {
+			os.Exit(api.ExitCode(apiErr))
+		}
+		os.Exit(1)
+	}
+}
+
+func init() {
+	rootCmd.PersistentFlags().StringVar(&flagToken, "token", "", "API token (overrides stored credentials)")
+	rootCmd.PersistentFlags().StringVar(&flagAPIURL, "api-url", "", "API base URL (default: https://api.craftybase.com)")
+	rootCmd.PersistentFlags().BoolVar(&flagJSON, "json", false, "Output raw API envelope (pretty-printed JSON)")
+	rootCmd.PersistentFlags().BoolVar(&flagNDJSON, "ndjson", false, "Output auto-paginated NDJSON stream")
+	rootCmd.PersistentFlags().BoolVar(&flagNoColor, "no-color", false, "Disable ANSI color output")
+	rootCmd.PersistentFlags().BoolVar(&flagVerbose, "verbose", false, "Show HTTP request/response detail (token redacted)")
+
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if flagJSON && flagNDJSON {
+			return fmt.Errorf("--json and --ndjson are mutually exclusive")
+		}
+		return nil
+	}
+}
+
+func resolveClient() (*api.Client, *config.Profile, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, nil, fmt.Errorf("load config: %w", err)
+	}
+
+	profile := cfg.ActiveProfile()
+	token := config.ResolvedToken(flagToken, profile)
+	apiURL := config.ResolvedAPIURL(flagAPIURL, profile)
+
+	client := api.NewClient(apiURL, token, "")
+	client.Verbose = flagVerbose
+
+	return client, profile, nil
+}
+
+func requireAuth() (*api.Client, *config.Profile, error) {
+	client, profile, err := resolveClient()
+	if err != nil {
+		return nil, nil, err
+	}
+	if client.Token == "" {
+		return nil, nil, &api.APIError{
+			StatusCode: 401,
+			Message:    "Not authenticated — run 'craftybase auth login'.",
+		}
+	}
+	return client, profile, nil
+}

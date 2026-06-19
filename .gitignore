@@ -1,0 +1,6 @@
+craftybase
+dist/
+*.test
+*.out
+.DS_Store
+testdata/golden/*.got
