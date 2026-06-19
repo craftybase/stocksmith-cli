@@ -113,7 +113,7 @@ func TestExecute_NoArgs_ShowsBrandedScreen(t *testing.T) {
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
 	rootCmd.SetArgs([]string{})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+	t.Cleanup(func() { rootCmd.SetArgs(nil); rootCmd.SetOut(nil) })
 
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
@@ -128,7 +128,7 @@ func TestExecute_RootHelpFlag_ShowsBrandedScreen(t *testing.T) {
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
 	rootCmd.SetArgs([]string{"--help"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+	t.Cleanup(func() { rootCmd.SetArgs(nil); rootCmd.SetOut(nil) })
 
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
@@ -142,7 +142,7 @@ func TestExecute_SubcommandHelp_UsesDefault(t *testing.T) {
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
 	rootCmd.SetArgs([]string{"materials", "--help"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+	t.Cleanup(func() { rootCmd.SetArgs(nil); rootCmd.SetOut(nil) })
 
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)

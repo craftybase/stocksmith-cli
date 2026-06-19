@@ -108,14 +108,16 @@ func renderRootHelp(root *cobra.Command, w io.Writer, opts renderOpts) {
 	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, st.Bold("Flags:"))
+	flagCol := columnWidth(flagRows)
 	for _, f := range flagRows {
-		fmt.Fprintln(w, "  "+pad(st.Fg(output.TealBright, f.name), f.name, 20)+st.Fg(output.Gray, f.desc))
+		fmt.Fprintln(w, "  "+pad(st.Fg(output.TealBright, f.name), f.name, flagCol)+st.Fg(output.Gray, f.desc))
 	}
 	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, st.Bold("Environment Variables:"))
+	envCol := columnWidth(envVarRows)
 	for _, e := range envVarRows {
-		fmt.Fprintln(w, "  "+pad(st.Fg(output.TealBright, e.name), e.name, 25)+st.Fg(output.Gray, e.desc))
+		fmt.Fprintln(w, "  "+pad(st.Fg(output.TealBright, e.name), e.name, envCol)+st.Fg(output.Gray, e.desc))
 	}
 	fmt.Fprintln(w)
 
@@ -132,6 +134,19 @@ func pad(colored, plain string, width int) string {
 		n = 2
 	}
 	return colored + strings.Repeat(" ", n)
+}
+
+// columnWidth returns the description-column offset for a set of rows: the
+// longest name plus a two-space minimum gap. Deriving it (rather than
+// hardcoding) keeps every description in a section aligned even as rows change.
+func columnWidth(rows []kv) int {
+	max := 0
+	for _, r := range rows {
+		if n := utf8.RuneCountInString(r.name); n > max {
+			max = n
+		}
+	}
+	return max + 2
 }
 
 func renderCommandRow(st output.Styler, root *cobra.Command, r cmdRow) string {
