@@ -19,7 +19,7 @@ func TestValidateListFlags(t *testing.T) {
 		{"page only", false, false, false, 2, ""},
 		{"all+page", false, false, true, 2, "--all and --page"},
 		{"all+ndjson", false, true, true, 0, "--all and --ndjson"},
-		{"json+all", true, false, true, 0, "--json and --all"},
+		{"json+all", true, false, true, 0, "--json and --all are mutually exclusive"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

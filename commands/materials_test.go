@@ -2,14 +2,15 @@ package commands
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/craftybase/craftybase-cli/internal/output"
 )
 
-func sampleMaterialJSON() []byte {
-	return []byte(`{
+func sampleMaterialJSON() json.RawMessage {
+	return json.RawMessage(`{
 		"id": 123, "name": "Organic Beeswax", "sku": "WAX-001",
 		"category": "Waxes", "stock_on_hand": "12.5", "unit_measure": "kg",
 		"unit_cost": {"amount": "8.75", "currency_code": "USD"}
@@ -22,7 +23,7 @@ func TestRenderMaterialShow_SingleRowTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	for _, want := range []string{"ID", "NAME", "SKU", "CATEGORY", "ON HAND", "UNIT COST", "Organic Beeswax", "WAX-001", "Waxes", "12.5 kg", "$8.75"} {
+	for _, want := range []string{"ID", "NAME", "SKU", "CATEGORY", "ON HAND", "UNIT COST", "123", "Organic Beeswax", "WAX-001", "Waxes", "12.5 kg", "$8.75"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("show output missing %q\n---\n%s", want, out)
 		}
