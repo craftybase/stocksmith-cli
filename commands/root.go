@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/cobra"
+	"golang.org/x/term"
+
 	"github.com/craftybase/craftybase-cli/internal/api"
 	"github.com/craftybase/craftybase-cli/internal/config"
 	"github.com/craftybase/craftybase-cli/internal/output"
-	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 var (

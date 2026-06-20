@@ -9,8 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/craftybase/craftybase-cli/commands"
 	"github.com/spf13/cobra/doc"
+
+	"github.com/craftybase/craftybase-cli/commands"
 )
 
 // outDir is relative to the repo root; run gen-docs from there.
