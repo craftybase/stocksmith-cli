@@ -4,3 +4,6 @@ dist/
 *.out
 .DS_Store
 testdata/golden/*.got
+
+# Superpowers workflow artifacts (specs/plans) — ticket planning docs live in craftybase-vault
+docs/superpowers/
