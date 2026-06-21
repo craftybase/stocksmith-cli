@@ -21,6 +21,9 @@ func TestProjectFilters_Apply(t *testing.T) {
 			t.Errorf("param %q: want %q, got %q", k, v, params.Get(k))
 		}
 	}
+	if len(params) != len(want) {
+		t.Errorf("expected exactly %d params, got %d: %v", len(want), len(params), params)
+	}
 
 	empty := url.Values{}
 	(&projectFilters{}).apply(empty)

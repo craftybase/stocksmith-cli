@@ -45,6 +45,9 @@ func TestManufactureFilters_Apply(t *testing.T) {
 			t.Errorf("param %q: want %q, got %q", k, v, params.Get(k))
 		}
 	}
+	if len(params) != len(want) {
+		t.Errorf("expected exactly %d params, got %d: %v", len(want), len(params), params)
+	}
 	empty := url.Values{}
 	(&manufactureFilters{}).apply(empty)
 	if len(empty) != 0 {
@@ -95,6 +98,7 @@ func TestRenderManufactureShow_DetailAndLineItems(t *testing.T) {
 		"STATUS", "completed", "PLANNED QTY", "50.0", "ACTUAL QTY", "48.0",
 		"MINUTES WORKED", "120", "START", "2026-06-01", "MATERIALS COST", "$24.50",
 		"LABOUR COST", "$18.00", "NOTES", "—",
+		"COMPLETED", "2026-06-02", "DEADLINE", "EXPIRY",
 		"LINE ITEMS (1)", "MATERIAL", "Beeswax", "BW-001", "200.0 grams", "$0.08",
 	} {
 		if !strings.Contains(out, want) {

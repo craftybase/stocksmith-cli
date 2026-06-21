@@ -82,7 +82,7 @@ func (f *manufactureFilters) apply(params url.Values) {
 	}
 }
 
-// manufactureDate trims an ISO 8601 timestamp to YYYY-MM-DD; empty/short -> "—".
+// manufactureDate trims an ISO 8601 timestamp to YYYY-MM-DD; empty/short → "—".
 func manufactureDate(ts string) string {
 	if len(ts) < 10 {
 		return "—"
