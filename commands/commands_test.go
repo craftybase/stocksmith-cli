@@ -144,3 +144,39 @@ func TestMaskToken_Format(t *testing.T) {
 // Verify fixtures exist and are referenced.
 var _ = accountFixture
 var _ = pingFixture
+
+func manufactureListFixture() []byte {
+	return []byte(`{
+		"manufactures": [
+			{"id": 1042, "product_id": 77, "production_status": "completed",
+			 "quantity": "50.0", "actual_quantity": "48.0", "start_date": "2026-06-01T00:00:00Z",
+			 "total_materials_cost": {"amount": "24.50", "currency_code": "USD"},
+			 "line_items": [{"id": 5001, "material_id": 312, "name": "Beeswax", "quantity": "200.0",
+			   "unit_price": {"amount": "0.08", "currency_code": "USD"}}]}
+		],
+		"meta": {"current_page": 1, "total_pages": 1, "total_count": 1, "per_page": 25}
+	}`)
+}
+
+// Contract: manufactures envelope key; production_status flat string; money is a
+// string-amount object; line_items is an array; never leaks the internal key.
+func TestManufactureListFixture_ContractCheck(t *testing.T) {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(manufactureListFixture(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := raw["manufactures"]; !ok {
+		t.Fatal("envelope must use key \"manufactures\"")
+	}
+	m := raw["manufactures"].([]interface{})[0].(map[string]interface{})
+	if _, ok := m["production_status"].(string); !ok {
+		t.Errorf("production_status must be a flat string, got %T", m["production_status"])
+	}
+	if _, ok := m["line_items"].([]interface{}); !ok {
+		t.Errorf("line_items must be an array, got %T", m["line_items"])
+	}
+	cost := m["total_materials_cost"].(map[string]interface{})
+	if _, ok := cost["amount"].(string); !ok {
+		t.Errorf("money amount must be a string, got %T", cost["amount"])
+	}
+}
