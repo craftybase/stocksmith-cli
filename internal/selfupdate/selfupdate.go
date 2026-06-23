@@ -125,7 +125,7 @@ func isBrewPath(realPath string) bool {
 
 // checkWritable verifies dir can be written by creating and removing a temp file.
 func checkWritable(dir string) error {
-	f, err := os.CreateTemp(dir, ".craftybase-write-test-*")
+	f, err := os.CreateTemp(dir, ".update-write-test-*")
 	if err != nil {
 		return fmt.Errorf("%s is not writable — re-run from a shell with permission to write there, or reinstall", dir)
 	}
