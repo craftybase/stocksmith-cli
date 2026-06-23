@@ -1,6 +1,11 @@
 package selfupdate
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestAssetNames(t *testing.T) {
 	c := Config{BinaryName: "craftybase", GOOS: "darwin", GOARCH: "arm64"}
@@ -35,5 +40,68 @@ func TestUpdateAvailable(t *testing.T) {
 	}
 	if updateAvailable("0.4.0", "v0.3.0") {
 		t.Error("current ahead of latest: not available")
+	}
+}
+
+func TestIsBrewPath(t *testing.T) {
+	if !isBrewPath("/opt/homebrew/Cellar/craftybase/0.2.0/bin/craftybase") {
+		t.Error("brew Cellar path should be detected")
+	}
+	if isBrewPath("/Users/x/.local/bin/craftybase") {
+		t.Error(".local/bin path is not brew")
+	}
+}
+
+func TestGuardDevRefuses(t *testing.T) {
+	c := Config{BinaryName: "craftybase", CurrentVersion: "dev", GOOS: "darwin"}
+	err := c.guard()
+	if err == nil || !strings.Contains(err.Error(), "released builds") {
+		t.Errorf("dev guard err = %v", err)
+	}
+}
+
+func TestGuardWindowsRefuses(t *testing.T) {
+	c := Config{BinaryName: "craftybase", CurrentVersion: "0.2.0", GOOS: "windows", Repo: "craftybase/craftybase-cli"}
+	err := c.guard()
+	if err == nil || !strings.Contains(err.Error(), "Windows") {
+		t.Errorf("windows guard err = %v", err)
+	}
+}
+
+func TestGuardBrewRefuses(t *testing.T) {
+	// Build a real Cellar-shaped path with a symlink, since guard() EvalSymlinks.
+	root := t.TempDir()
+	cellarBin := filepath.Join(root, "Cellar", "craftybase", "0.2.0", "bin")
+	if err := os.MkdirAll(cellarBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	realBin := filepath.Join(cellarBin, "craftybase")
+	if err := os.WriteFile(realBin, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	linkDir := filepath.Join(root, "bin")
+	if err := os.MkdirAll(linkDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(linkDir, "craftybase")
+	if err := os.Symlink(realBin, link); err != nil {
+		t.Fatal(err)
+	}
+	c := Config{BinaryName: "craftybase", CurrentVersion: "0.2.0", GOOS: "darwin", ExecPath: link}
+	err := c.guard()
+	if err == nil || !strings.Contains(err.Error(), "Homebrew") {
+		t.Errorf("brew guard err = %v", err)
+	}
+}
+
+func TestGuardPassesForWritableLocalBin(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "craftybase")
+	if err := os.WriteFile(exe, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := Config{BinaryName: "craftybase", CurrentVersion: "0.2.0", GOOS: "darwin", ExecPath: exe}
+	if err := c.guard(); err != nil {
+		t.Errorf("guard should pass, got %v", err)
 	}
 }

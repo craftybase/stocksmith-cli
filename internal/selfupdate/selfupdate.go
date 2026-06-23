@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -90,4 +91,46 @@ func isDevVersion(v string) bool {
 // updateAvailable reports whether latest is strictly newer than current.
 func updateAvailable(current, latest string) bool {
 	return semver.Compare(canonicalVersion(latest), canonicalVersion(current)) > 0
+}
+
+// guard returns a refusal error when the running binary must not self-update.
+func (c *Config) guard() error {
+	if isDevVersion(c.CurrentVersion) {
+		cur := c.CurrentVersion
+		if cur == "" {
+			cur = "unknown"
+		}
+		return fmt.Errorf("update is only available for released builds (current version: %s)", cur)
+	}
+	if c.GOOS == "windows" {
+		return fmt.Errorf("self-update isn't supported on Windows — download the latest release zip from https://github.com/%s/releases", c.Repo)
+	}
+	real, err := filepath.EvalSymlinks(c.ExecPath)
+	if err != nil {
+		return fmt.Errorf("resolve executable path: %w", err)
+	}
+	if isBrewPath(real) {
+		return fmt.Errorf("%s was installed via Homebrew — run 'brew upgrade %s' instead", c.BinaryName, c.BinaryName)
+	}
+	if err := checkWritable(filepath.Dir(real)); err != nil {
+		return err
+	}
+	return nil
+}
+
+// isBrewPath reports whether a resolved executable path lives in a Homebrew Cellar.
+func isBrewPath(realPath string) bool {
+	return strings.Contains(filepath.ToSlash(realPath), "/Cellar/")
+}
+
+// checkWritable verifies dir can be written by creating and removing a temp file.
+func checkWritable(dir string) error {
+	f, err := os.CreateTemp(dir, ".craftybase-write-test-*")
+	if err != nil {
+		return fmt.Errorf("%s is not writable — re-run from a shell with permission to write there, or reinstall", dir)
+	}
+	name := f.Name()
+	_ = f.Close()
+	_ = os.Remove(name)
+	return nil
 }
