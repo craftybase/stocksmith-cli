@@ -16,6 +16,7 @@ The command-line interface for Craftybase
   $ craftybase recipes list | show                Manage recipes
   $ craftybase completion <shell>                 Generate shell completion scripts
   $ craftybase version                            Print version information
+  $ craftybase update                             Update craftybase to the latest release
 
 Flags:
       --json           Output raw API envelope (pretty-printed JSON)

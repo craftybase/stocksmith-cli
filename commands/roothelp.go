@@ -51,6 +51,7 @@ var commandRows = []cmdRow{
 	{name: "recipes", subs: []string{"list", "show"}},
 	{name: "completion", args: "<shell>", desc: "Generate shell completion scripts"},
 	{name: "version"},
+	{name: "update"},
 }
 
 type kv struct{ name, desc string }
