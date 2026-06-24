@@ -8,5 +8,8 @@ website/node_modules
 website/dist
 website/.astro
 
+# Local git worktrees (created by EnterWorktree / git worktree add); never commit these
+.claude/worktrees/
+
 # Superpowers workflow artifacts (specs/plans) — ticket planning docs live in craftybase-vault
 docs/superpowers/
