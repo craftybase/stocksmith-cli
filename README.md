@@ -1,6 +1,6 @@
 # Stocksmith CLI
 
-The official command-line interface for the [Stocksmith](https://stocksmith.com) Public API — manage your inventory from the terminal.
+The official command-line interface for the [Stocksmith](https://stocksmith.io) Public API — manage your inventory from the terminal.
 
 Full docs: **https://cli.stocksmith.dev**
 
