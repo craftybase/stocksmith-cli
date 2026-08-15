@@ -35,14 +35,35 @@ type Recipe struct {
 	UnitCOGS                 *output.Money      `json:"unit_cogs"`
 }
 
-// RecipeIngredient is one consumed material (bill-of-materials line) on a Recipe.
-// Ingredients carry no per-line cost — costs exist only as recipe-level rollups.
+// RecipeIngredient is one consumed material or component (bill-of-materials line)
+// on a Recipe. Ingredients carry no per-line cost — costs exist only as
+// recipe-level rollups.
+//
+// ingredient_type says which endpoint resolves ingredient_id: materials for
+// "material", components for "component". material_id/material_name are the
+// deprecated aliases and are null for components, so they are only read as a
+// fallback when talking to an API that predates ingredient_type.
 type RecipeIngredient struct {
-	ID           int    `json:"id"`
-	MaterialID   int    `json:"material_id"`
-	MaterialName string `json:"material_name"`
-	Quantity     string `json:"quantity"`
-	Unit         string `json:"unit"`
+	ID             int    `json:"id"`
+	IngredientType string `json:"ingredient_type"`
+	IngredientID   *int   `json:"ingredient_id"`
+	IngredientName string `json:"ingredient_name"`
+	MaterialID     *int   `json:"material_id"`
+	MaterialName   string `json:"material_name"`
+	Quantity       string `json:"quantity"`
+	Unit           string `json:"unit"`
+}
+
+// label renders the ingredient's name, falling back to its id, then to the
+// deprecated material_* aliases for older API responses.
+func (ing *RecipeIngredient) label() string {
+	if name := ing.IngredientName; name != "" {
+		return name
+	}
+	if ing.IngredientID != nil {
+		return refOrDash(ing.MaterialName, ing.IngredientID)
+	}
+	return refOrDash(ing.MaterialName, ing.MaterialID)
 }
 
 var recipesCmd = &cobra.Command{
@@ -159,12 +180,13 @@ func renderRecipeShow(w io.Writer, raw json.RawMessage, useColor bool) error {
 		fmt.Fprintln(w, "No ingredients.")
 		return nil
 	}
-	headers := []string{"MATERIAL", "QTY", "UNIT"}
+	headers := []string{"INGREDIENT", "TYPE", "QTY", "UNIT"}
 	rows := make([][]string, 0, len(r.Ingredients))
 	for i := range r.Ingredients {
 		ing := &r.Ingredients[i]
 		rows = append(rows, []string{
-			nameOrID(ing.MaterialName, ing.MaterialID),
+			ing.label(),
+			dashIfEmpty(ing.IngredientType),
 			dashIfEmpty(ing.Quantity),
 			dashIfEmpty(ing.Unit),
 		})
