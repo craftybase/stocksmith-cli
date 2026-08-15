@@ -15,8 +15,10 @@ func sampleRecipeJSON() json.RawMessage {
 		"name": "Base Recipe", "manufacture_batch_quantity": "10.0",
 		"manufacture_minutes": 60, "notes": "Pour at 60C",
 		"ingredients": [
-			{"id": 5001, "material_id": 312, "material_name": "Soy Wax", "quantity": "200.0", "unit": "grams"},
-			{"id": 5002, "material_id": 313, "material_name": "Cotton Wick", "quantity": "1.0", "unit": "each"}
+			{"id": 5001, "ingredient_type": "material", "ingredient_id": 312, "ingredient_name": "Soy Wax",
+			 "material_id": 312, "material_name": "Soy Wax", "quantity": "200.0", "unit": "grams"},
+			{"id": 5002, "ingredient_type": "material", "ingredient_id": 313, "ingredient_name": "Cotton Wick",
+			 "material_id": 313, "material_name": "Cotton Wick", "quantity": "1.0", "unit": "each"}
 		],
 		"total_cost": {"amount": "50.00", "currency_code": "USD"},
 		"unit_cost": {"amount": "5.00", "currency_code": "USD"},
@@ -128,12 +130,51 @@ func TestRenderRecipeShow_DetailAndIngredients(t *testing.T) {
 		"TOTAL COST", "$50.00", "UNIT COST", "$5.00",
 		"TOTAL LABOUR", "$15.00", "UNIT LABOUR", "$1.50",
 		"TOTAL COGS", "$65.00", "UNIT COGS", "$6.50",
-		"INGREDIENTS (2)", "MATERIAL", "QTY", "UNIT",
-		"Soy Wax", "200.0", "grams", "Cotton Wick",
+		"INGREDIENTS (2)", "INGREDIENT", "TYPE", "QTY", "UNIT",
+		"Soy Wax", "material", "200.0", "grams", "Cotton Wick",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("show output missing %q\n---\n%s", want, out)
 		}
+	}
+}
+
+func TestRenderRecipeShow_ComponentIngredientKeepsItsName(t *testing.T) {
+	raw := json.RawMessage(`{"id":8,"product_id":3,"product_name":"Bottled Beer","name":"Bottling",
+		"manufacture_batch_quantity":"12.0","ingredients":[
+			{"id":6001,"ingredient_type":"component","ingredient_id":2167942,"ingredient_name":"Punk IPA",
+			 "material_id":null,"material_name":null,"quantity":"0.5","unit":"litres"}
+		]}`)
+	var buf bytes.Buffer
+	if err := renderRecipeShow(&buf, raw, false); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{"Punk IPA", "component", "0.5", "litres"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("component ingredient missing %q\n---\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "\t0\t") || strings.Contains(out, " 0 ") {
+		t.Errorf("null material_id leaked as a zero id:\n%s", out)
+	}
+}
+
+func TestRecipeIngredientLabel_FallsBackToDeprecatedAliases(t *testing.T) {
+	id := 312
+	legacy := RecipeIngredient{MaterialID: &id, MaterialName: "Soy Wax"}
+	if got := legacy.label(); got != "Soy Wax" {
+		t.Errorf("pre-ingredient_type response: want %q, got %q", "Soy Wax", got)
+	}
+
+	unnamed := RecipeIngredient{MaterialID: &id}
+	if got := unnamed.label(); got != "312" {
+		t.Errorf("name-less legacy response: want %q, got %q", "312", got)
+	}
+
+	empty := RecipeIngredient{}
+	if got := empty.label(); got != "—" {
+		t.Errorf("empty ingredient: want %q, got %q", "—", got)
 	}
 }
 
