@@ -17,6 +17,11 @@ import (
 // model). Only fields the CLI renders or passes through are modelled. Money fields
 // are pointers — a JSON null decodes to nil → "—". Expenses gate the whole resource
 // with a 403, so money is normally always present once past the gate.
+//
+// received_status is the three-state receipt rollup ("received", "partial",
+// "outstanding"); the header received boolean is its AND across the lines, so it
+// cannot tell a part-arrived purchase from one where nothing has arrived. The
+// boolean stays modelled as the fallback for an API that predates the rollup.
 type Expense struct {
 	ID                 int               `json:"id"`
 	Code               string            `json:"code"`
@@ -26,6 +31,7 @@ type Expense struct {
 	SupplierName       string            `json:"supplier_name"`
 	Paid               bool              `json:"paid"`
 	Received           bool              `json:"received"`
+	ReceivedStatus     string            `json:"received_status"`
 	Notes              string            `json:"notes"`
 	Amount             *output.Money     `json:"amount"`
 	ItemTotal          *output.Money     `json:"item_total"`
@@ -37,8 +43,12 @@ type Expense struct {
 
 // ExpenseLineItem is one purchase line on an Expense. material_id is null for
 // non-material (overhead/service/fee) lines.
+//
+// received is a pointer so an API that predates per-line receipt renders "—"
+// rather than reporting every line as not yet arrived.
 type ExpenseLineItem struct {
 	ID           int           `json:"id"`
+	Received     *bool         `json:"received"`
 	MaterialID   *int          `json:"material_id"`
 	MaterialName string        `json:"material_name"`
 	CategoryID   *int          `json:"category_id"`
@@ -59,9 +69,10 @@ var (
 )
 
 // expenseFilters are the A6 list filters: from, to, updated_since, category_id,
-// supplier_id. Values pass through verbatim; the API validates (HTTP 400).
+// supplier_id, received_status. Values pass through verbatim; the API validates
+// (HTTP 400).
 type expenseFilters struct {
-	from, to, updatedSince, categoryID, supplierID string
+	from, to, updatedSince, categoryID, supplierID, receivedStatus string
 }
 
 func (f *expenseFilters) addFlags(cmd *cobra.Command) {
@@ -70,6 +81,7 @@ func (f *expenseFilters) addFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.updatedSince, "updated-since", "", "Return expenses updated on or after this time (ISO 8601; includes line-item edits)")
 	cmd.Flags().StringVar(&f.categoryID, "category-id", "", "Filter by line-item category ID")
 	cmd.Flags().StringVar(&f.supplierID, "supplier-id", "", "Filter by supplier ID")
+	cmd.Flags().StringVar(&f.receivedStatus, "received-status", "", "Filter by receipt state: received, partial, outstanding (comma-separate for more than one)")
 }
 
 func (f *expenseFilters) apply(params url.Values) {
@@ -88,6 +100,9 @@ func (f *expenseFilters) apply(params url.Values) {
 	if f.supplierID != "" {
 		params.Set("supplier_id", f.supplierID)
 	}
+	if f.receivedStatus != "" {
+		params.Set("received_status", f.receivedStatus)
+	}
 }
 
 // expenseDate trims an ISO 8601 date or timestamp to YYYY-MM-DD; empty/short → "—".
@@ -99,8 +114,22 @@ func expenseDate(ts string) string {
 	return ts[:10]
 }
 
+// receiptStatus renders the three-state receipt rollup. It falls back to the
+// header boolean for an API that predates received_status — which can only
+// distinguish fully received from everything else, so a part-arrived purchase
+// reads as "outstanding" there rather than being invented as "partial".
+func (e *Expense) receiptStatus() string {
+	if e.ReceivedStatus != "" {
+		return e.ReceivedStatus
+	}
+	if e.Received {
+		return "received"
+	}
+	return "outstanding"
+}
+
 func expensesToTable(rawItems []json.RawMessage) ([]string, [][]string) {
-	headers := []string{"ID", "CODE", "SUPPLIER", "PURCHASED", "PAID", "RECEIVED", "ITEMS", "AMOUNT"}
+	headers := []string{"ID", "CODE", "SUPPLIER", "PURCHASED", "PAID", "RECEIPT", "ITEMS", "AMOUNT"}
 	rows := make([][]string, 0, len(rawItems))
 	for i, raw := range rawItems {
 		var e Expense
@@ -120,7 +149,7 @@ func expenseToRow(e *Expense) []string {
 		refOrDash(e.SupplierName, e.SupplierID),
 		expenseDate(e.PurchasedAt),
 		output.FormatBool(e.Paid),
-		output.FormatBool(e.Received),
+		e.receiptStatus(),
 		strconv.Itoa(len(e.LineItems)),
 		output.FormatMoney(e.Amount),
 	}
@@ -143,7 +172,7 @@ func renderExpenseShow(w io.Writer, raw json.RawMessage, useColor bool) error {
 		{"PURCHASED", expenseDate(e.PurchasedAt)},
 		{"ESTIMATED ARRIVAL", expenseDate(e.EstimatedArrivalAt)},
 		{"PAID", output.FormatBool(e.Paid)},
-		{"RECEIVED", output.FormatBool(e.Received)},
+		{"RECEIPT", e.receiptStatus()},
 		{"NOTES", dashIfEmpty(e.Notes)},
 		{"AMOUNT", output.FormatMoney(e.Amount)},
 		{"ITEM TOTAL", output.FormatMoney(e.ItemTotal)},
@@ -157,7 +186,7 @@ func renderExpenseShow(w io.Writer, raw json.RawMessage, useColor bool) error {
 		fmt.Fprintln(w, "No line items.")
 		return nil
 	}
-	headers := []string{"MATERIAL", "CATEGORY", "QTY", "UNIT PRICE", "TOTAL"}
+	headers := []string{"MATERIAL", "CATEGORY", "QTY", "RECEIVED", "UNIT PRICE", "TOTAL"}
 	rows := make([][]string, 0, len(e.LineItems))
 	for i := range e.LineItems {
 		li := &e.LineItems[i]
@@ -165,6 +194,7 @@ func renderExpenseShow(w io.Writer, raw json.RawMessage, useColor bool) error {
 			refOrDash(li.MaterialName, li.MaterialID),
 			refOrDash(li.CategoryName, li.CategoryID),
 			dashIfEmpty(li.Quantity),
+			output.FormatBoolPtr(li.Received),
 			output.FormatMoney(li.UnitPrice),
 			output.FormatMoney(li.TotalPrice),
 		})
@@ -180,9 +210,10 @@ func init() {
 		singular:    "expense",
 		listLong: "List expenses (purchases) from your " + brand.ProductName + " account.\n\n" +
 			"An expense is a supplier purchase — header totals plus the materials and costs\n" +
-			"on each line. Filter by purchase-date range, change time, category, or supplier.\n" +
-			"Use --all to fetch all pages, or --ndjson for streaming NDJSON output suitable\n" +
-			"for data pipelines.",
+			"on each line. RECEIPT is the three-state rollup over the lines: received,\n" +
+			"partial, or outstanding. Filter by purchase-date range, change time, category,\n" +
+			"supplier, or receipt state. Use --all to fetch all pages, or --ndjson for\n" +
+			"streaming NDJSON output suitable for data pipelines.",
 		toTable:    expensesToTable,
 		renderShow: renderExpenseShow,
 	}

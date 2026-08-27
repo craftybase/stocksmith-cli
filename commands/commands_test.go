@@ -19,6 +19,7 @@ func materialListFixture() []byte {
 				"sku": "WAX-001",
 				"category": "Waxes",
 				"stock_on_hand": "12.5",
+				"on_order": "8.0",
 				"unit_measure": "kg",
 				"unit_cost": {"amount": "8.75", "currency_code": "USD"}
 			},
@@ -28,6 +29,7 @@ func materialListFixture() []byte {
 				"sku": "WAX-002",
 				"category": "Waxes",
 				"stock_on_hand": "40.0",
+				"on_order": "0.0",
 				"unit_measure": "kg",
 				"unit_cost": {"amount": "4.10", "currency_code": "USD"}
 			}
@@ -84,6 +86,19 @@ func TestMaterialListFixture_ContractCheck(t *testing.T) {
 	amtVal := unitCost["amount"]
 	if _, ok := amtVal.(string); !ok {
 		t.Errorf("fixture amount must be string, got %T", amtVal)
+	}
+
+	// on_order is a decimal string like its sibling quantities, never a number,
+	// and is ungated — it must not sit inside the unit_cost financial block.
+	onOrder, ok := mat["on_order"]
+	if !ok {
+		t.Fatal("material must expose on_order")
+	}
+	if _, ok := onOrder.(string); !ok {
+		t.Errorf("on_order must be a string, got %T: %v", onOrder, onOrder)
+	}
+	if _, ok := unitCost["on_order"]; ok {
+		t.Error("on_order must be a top-level material field, not nested under unit_cost")
 	}
 }
 
@@ -236,8 +251,9 @@ func expenseListFixture() []byte {
 		"expenses": [
 			{"id": 88, "code": "EXP-001A", "purchased_at": "2026-05-14T09:00:00Z",
 			 "supplier_id": 12, "supplier_name": "Candle Supply Co.", "paid": true, "received": true,
+			 "received_status": "received",
 			 "amount": {"amount": "312.50", "currency_code": "USD"},
-			 "line_items": [{"id": 401, "material_id": 5, "material_name": "Soy Wax",
+			 "line_items": [{"id": 401, "received": true, "material_id": 5, "material_name": "Soy Wax",
 			   "material_expense": true, "category_id": 3, "category_name": "Raw Materials",
 			   "quantity": "50.0", "unit_price": {"amount": "4.00", "currency_code": "USD"},
 			   "total_price": {"amount": "200.00", "currency_code": "USD"}}]}
@@ -246,7 +262,8 @@ func expenseListFixture() []byte {
 	}`)
 }
 
-// Contract: expenses envelope key; line_items array; money string-amount; aliases
+// Contract: expenses envelope key; line_items array; money string-amount; per-line
+// received boolean alongside the three-state received_status rollup; aliases
 // supplier_id/material_id and never leaks contact_id/item_id/project_id.
 func TestExpenseListFixture_ContractCheck(t *testing.T) {
 	var raw map[string]interface{}
@@ -279,5 +296,32 @@ func TestExpenseListFixture_ContractCheck(t *testing.T) {
 	}
 	if _, ok := li["item_id"]; ok {
 		t.Error("line item must not leak internal item_id")
+	}
+
+	// Receipt state: a boolean per line, and a three-state string rollup on the
+	// expense. The rollup must stay a string — the API deliberately does not leak
+	// the internal integer encoding (1/0/2).
+	recv, ok := li["received"]
+	if !ok {
+		t.Fatal("line item must expose received")
+	}
+	if _, ok := recv.(bool); !ok {
+		t.Errorf("line item received must be a boolean, got %T: %v", recv, recv)
+	}
+	status, ok := e["received_status"]
+	if !ok {
+		t.Fatal("expense must expose received_status")
+	}
+	statusStr, ok := status.(string)
+	if !ok {
+		t.Fatalf("received_status must be a string, got %T: %v", status, status)
+	}
+	switch statusStr {
+	case "received", "partial", "outstanding":
+	default:
+		t.Errorf("received_status must be one of received/partial/outstanding, got %q", statusStr)
+	}
+	if _, ok := e["received"].(bool); !ok {
+		t.Error("header received boolean must remain a boolean alongside received_status")
 	}
 }

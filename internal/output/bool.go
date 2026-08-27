@@ -8,3 +8,12 @@ func FormatBool(b bool) string {
 	}
 	return "no"
 }
+
+// FormatBoolPtr renders a nullable boolean as "yes" / "no", and a JSON null (or
+// an absent field) as the placeholder — an unknown is not a false.
+func FormatBoolPtr(b *bool) string {
+	if b == nil {
+		return placeholder
+	}
+	return FormatBool(*b)
+}

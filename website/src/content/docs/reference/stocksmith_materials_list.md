@@ -11,8 +11,10 @@ List materials
 
 List materials from your Stocksmith account.
 
-Filter by SKU, name, category, or state. Use --all to fetch all pages,
-or --ndjson for streaming NDJSON output suitable for data pipelines.
+ON ORDER is the quantity still inbound on outstanding purchases, in the same
+stock unit as ON HAND. Filter by SKU, name, category, or state. Use --all to
+fetch all pages, or --ndjson for streaming NDJSON output suitable for data
+pipelines.
 
 ```
 stocksmith materials list [flags]
