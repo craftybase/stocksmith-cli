@@ -133,6 +133,7 @@ func TestMaterialsList_GoldenFixtureContracts(t *testing.T) {
 				"sku": "WAX-001",
 				"category": "Waxes",
 				"stock_on_hand": "12.5",
+				"on_order": "8.0",
 				"unit_measure": "kg",
 				"unit_cost": {"amount": "8.75", "currency_code": "USD"}
 			}
@@ -169,5 +170,10 @@ func TestMaterialsList_GoldenFixtureContracts(t *testing.T) {
 	amtVal := unitCost["amount"]
 	if _, isStr := amtVal.(string); !isStr {
 		t.Errorf("unit_cost.amount must be a string, got %T: %v", amtVal, amtVal)
+	}
+
+	onOrder := mat["on_order"]
+	if _, isStr := onOrder.(string); !isStr {
+		t.Errorf("on_order must be a string, got %T: %v", onOrder, onOrder)
 	}
 }

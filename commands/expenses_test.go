@@ -13,18 +13,18 @@ func sampleExpenseJSON() json.RawMessage {
 		"id": 88, "code": "EXP-001A",
 		"purchased_at": "2026-05-14T09:00:00Z", "estimated_arrival_at": "2026-05-21",
 		"supplier_id": 12, "supplier_name": "Candle Supply Co.",
-		"paid": true, "received": false, "notes": "Bulk restock",
+		"paid": true, "received": false, "received_status": "partial", "notes": "Bulk restock",
 		"amount":     {"amount": "312.50", "currency_code": "USD"},
 		"item_total": {"amount": "290.00", "currency_code": "USD"},
 		"tax":        {"amount": "10.00",  "currency_code": "USD"},
 		"shipping":   {"amount": "12.50",  "currency_code": "USD"},
 		"discount":   {"amount": "0.00",   "currency_code": "USD"},
 		"line_items": [
-			{"id": 401, "material_id": 5, "material_name": "Soy Wax", "material_expense": true,
+			{"id": 401, "received": true, "material_id": 5, "material_name": "Soy Wax", "material_expense": true,
 			 "category_id": 3, "category_name": "Raw Materials", "quantity": "50.0",
 			 "unit_price": {"amount": "4.00", "currency_code": "USD"},
 			 "total_price": {"amount": "200.00", "currency_code": "USD"}},
-			{"id": 403, "material_id": null, "material_name": null, "material_expense": false,
+			{"id": 403, "received": false, "material_id": null, "material_name": null, "material_expense": false,
 			 "category_id": 7, "category_name": "Freight & Handling", "quantity": "1.0",
 			 "unit_price": {"amount": "12.50", "currency_code": "USD"},
 			 "total_price": {"amount": "12.50", "currency_code": "USD"}}
@@ -45,10 +45,10 @@ func TestExpenseDate(t *testing.T) {
 }
 
 func TestExpenseFilters_Apply(t *testing.T) {
-	f := expenseFilters{from: "2026-01-01", to: "2026-06-30", updatedSince: "2026-06-01T00:00:00Z", categoryID: "3", supplierID: "12"}
+	f := expenseFilters{from: "2026-01-01", to: "2026-06-30", updatedSince: "2026-06-01T00:00:00Z", categoryID: "3", supplierID: "12", receivedStatus: "partial,outstanding"}
 	params := url.Values{}
 	f.apply(params)
-	want := map[string]string{"from": "2026-01-01", "to": "2026-06-30", "updated_since": "2026-06-01T00:00:00Z", "category_id": "3", "supplier_id": "12"}
+	want := map[string]string{"from": "2026-01-01", "to": "2026-06-30", "updated_since": "2026-06-01T00:00:00Z", "category_id": "3", "supplier_id": "12", "received_status": "partial,outstanding"}
 	for k, v := range want {
 		if params.Get(k) != v {
 			t.Errorf("param %q: want %q, got %q", k, v, params.Get(k))
@@ -66,13 +66,13 @@ func TestExpenseFilters_Apply(t *testing.T) {
 
 func TestExpensesToTable_Columns(t *testing.T) {
 	headers, rows := expensesToTable([]json.RawMessage{sampleExpenseJSON()})
-	wantHeaders := []string{"ID", "CODE", "SUPPLIER", "PURCHASED", "PAID", "RECEIVED", "ITEMS", "AMOUNT"}
+	wantHeaders := []string{"ID", "CODE", "SUPPLIER", "PURCHASED", "PAID", "RECEIPT", "ITEMS", "AMOUNT"}
 	for i, h := range wantHeaders {
 		if headers[i] != h {
 			t.Errorf("header %d: want %q, got %q", i, h, headers[i])
 		}
 	}
-	want := []string{"88", "EXP-001A", "Candle Supply Co.", "2026-05-14", "yes", "no", "2", "$312.50"}
+	want := []string{"88", "EXP-001A", "Candle Supply Co.", "2026-05-14", "yes", "partial", "2", "$312.50"}
 	if len(rows) != 1 {
 		t.Fatalf("want 1 row, got %d", len(rows))
 	}
@@ -94,7 +94,7 @@ func TestExpensesToTable_FallbacksAndSkip(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("want 1 row (malformed skipped), got %d", len(rows))
 	}
-	want := []string{"9", "—", "—", "2026-02-02", "no", "yes", "0", "—"}
+	want := []string{"9", "—", "—", "2026-02-02", "no", "received", "0", "—"}
 	for i := range want {
 		if rows[0][i] != want[i] {
 			t.Errorf("col %d: want %q, got %q", i, want[i], rows[0][i])
@@ -114,10 +114,10 @@ func TestRenderExpenseShow_DetailAndLineItems(t *testing.T) {
 	for _, want := range []string{
 		"ID", "88", "CODE", "EXP-001A", "SUPPLIER", "Candle Supply Co.",
 		"PURCHASED", "2026-05-14", "ESTIMATED ARRIVAL", "2026-05-21",
-		"PAID", "yes", "RECEIVED", "no", "NOTES", "Bulk restock",
+		"PAID", "yes", "RECEIPT", "partial", "NOTES", "Bulk restock",
 		"AMOUNT", "$312.50", "ITEM TOTAL", "$290.00", "TAX", "$10.00",
 		"SHIPPING", "$12.50", "DISCOUNT", "$0.00",
-		"LINE ITEMS (2)", "MATERIAL", "CATEGORY", "QTY", "UNIT PRICE", "TOTAL",
+		"LINE ITEMS (2)", "MATERIAL", "CATEGORY", "QTY", "RECEIVED", "UNIT PRICE", "TOTAL",
 		"Soy Wax", "Raw Materials", "50.0", "$4.00", "$200.00",
 		"Freight & Handling",
 	} {
@@ -137,4 +137,70 @@ func TestRenderExpenseShow_NoLineItems(t *testing.T) {
 	if !strings.Contains(out, "LINE ITEMS (0)") || !strings.Contains(out, "No line items.") {
 		t.Errorf("expected empty line-items state, got:\n%s", out)
 	}
+}
+
+// received_status is the whole point of the API change: a part-arrived purchase
+// and one where nothing has arrived both carry received:false, so the rollup —
+// not the boolean — decides what RECEIPT shows.
+func TestExpenseReceiptStatus_PrefersRollupOverBoolean(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		expense Expense
+		want    string
+	}{
+		{"partial beats received:false", Expense{Received: false, ReceivedStatus: "partial"}, "partial"},
+		{"outstanding", Expense{Received: false, ReceivedStatus: "outstanding"}, "outstanding"},
+		{"received", Expense{Received: true, ReceivedStatus: "received"}, "received"},
+		{"legacy API, received:true", Expense{Received: true}, "received"},
+		{"legacy API, received:false", Expense{Received: false}, "outstanding"},
+	} {
+		if got := tc.expense.receiptStatus(); got != tc.want {
+			t.Errorf("%s: want %q, got %q", tc.name, tc.want, got)
+		}
+	}
+}
+
+func TestRenderExpenseShow_LineItemReceived(t *testing.T) {
+	var buf bytes.Buffer
+	if err := renderExpenseShow(&buf, sampleExpenseJSON(), false); err != nil {
+		t.Fatal(err)
+	}
+	// Soy Wax arrived, freight has not — the two lines must differ.
+	lines := strings.Split(buf.String(), "\n")
+	var wax, freight string
+	for _, l := range lines {
+		if strings.Contains(l, "Soy Wax") {
+			wax = l
+		}
+		if strings.Contains(l, "Freight & Handling") {
+			freight = l
+		}
+	}
+	if !strings.Contains(wax, "yes") {
+		t.Errorf("received line should render yes, got %q", wax)
+	}
+	if !strings.Contains(freight, "no") {
+		t.Errorf("unreceived line should render no, got %q", freight)
+	}
+}
+
+// A line from an API that predates per-line receipt has no received key. It must
+// render "—" rather than claiming the line has not arrived.
+func TestRenderExpenseShow_AbsentLineReceivedRendersDash(t *testing.T) {
+	raw := json.RawMessage(`{"id":7,"code":"EXP-Z","paid":true,"received":true,
+		"purchased_at":"2026-01-01T00:00:00Z",
+		"line_items":[{"id":1,"material_id":5,"material_name":"Soy Wax","quantity":"2.0"}]}`)
+	var buf bytes.Buffer
+	if err := renderExpenseShow(&buf, raw, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(buf.String(), "\n") {
+		if strings.Contains(line, "Soy Wax") {
+			if strings.Contains(line, "yes") || strings.Contains(line, "no") {
+				t.Errorf("absent received should render —, got %q", line)
+			}
+			return
+		}
+	}
+	t.Fatalf("line item row not found in:\n%s", buf.String())
 }
