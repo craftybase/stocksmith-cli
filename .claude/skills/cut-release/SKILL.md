@@ -154,7 +154,21 @@ or re-running the install script").
 - **The Homebrew tap must actually bump.** GoReleaser's `brews:` block pushes
   the formula to the tap repo using `HOMEBREW_TAP_TOKEN`. If the formula didn't
   update, check that secret and the release-run logs — the GitHub release can
-  succeed while the tap push fails.
+  succeed while the tap push fails. Two token failures read almost identically:
+  `401 Bad credentials` means the token expired or was revoked; `403 Resource
+  not accessible by personal access token` means it authenticates but lacks
+  **Contents: Read and write** on the tap (or the tap sits outside a
+  fine-grained token's selected repositories). Confirm a fix by the tap's latest
+  commit *author* — `goreleaserbot`, not a human. To unblock users without
+  another tag, bump the formula by hand from the published `*_checksums.txt`.
+- **Never re-run a failed release run — cut the next patch tag instead.**
+  `.goreleaser.yml` sets no `release.mode`, so a re-run aborts uploading the
+  assets it already published (`422 already_exists`) *before* reaching the
+  Homebrew step. A run that failed at the brew step therefore can never be
+  finished by re-running it. Fix the cause, then tag `vX.Y.(Z+1)` on the same
+  commit: identical binary, clean run. (Delete the dead release afterwards with
+  `gh release delete vX.Y.Z --cleanup-tag` once you've checked its assets have
+  no external downloads.)
 - **`brews` is deprecated** in GoReleaser (migrating to `homebrew_casks` is a
   separate, deliberate change — see the project memory). It still works
   (warning only); don't "fix" it as part of cutting a release.
